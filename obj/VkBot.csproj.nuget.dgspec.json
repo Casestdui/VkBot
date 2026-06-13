@@ -46,7 +46,7 @@
           "dependencies": {
             "VkNet": {
               "target": "Package",
-              "version": "[1.78.0, )"
+              "version": "[1.70.0, )"
             }
           },
           "imports": [
