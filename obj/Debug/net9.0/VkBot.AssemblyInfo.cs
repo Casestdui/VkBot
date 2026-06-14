@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VkBot")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4a644dde9e18a400309bc1f7a086514fb1cd4bfd")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3113781360a349be39091c25623aa0abdc113ff4")]
 [assembly: System.Reflection.AssemblyProductAttribute("VkBot")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VkBot")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

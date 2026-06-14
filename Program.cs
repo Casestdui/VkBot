@@ -1,61 +1,28 @@
-﻿using System;
-using VkNet;
+﻿using VkNet;
 using VkNet.Model;
-using VkNet.Enums.SafetyEnums;
-using VkNet.Model.RequestParams;
+
+const long GroupId = 239555205;
+
+// сюда вставь свой токен
+const string Token = "токен";
 
 var api = new VkApi();
 
 api.Authorize(new ApiAuthParams
 {
-    AccessToken = "СЮДА ТОКЕН ДЛЯ ПЕЛЕНАНИЯ ЛЯЛЬКИ"
+    AccessToken = Token
 });
 
-Console.WriteLine("Бот запущен!");
+Console.WriteLine("Авторизация успешна");
 
-var server = api.Groups.GetLongPollServer(239555205);
+var pollManager = new PollManager();
 
-while (true)
-{
-    var history = api.Groups.GetBotsLongPollHistory(new BotsLongPollHistoryParams
-    {
-        Key = server.Key,
-        Server = server.Server,
-        Ts = server.Ts
-    });
+var commandHandler = new CommandHandler(pollManager);
 
-    server.Ts = history.Ts;
+var botService = new BotService(
+    api,
+    commandHandler,
+    GroupId
+);
 
-    foreach (var u in history.Updates)
-    {
-        if (u.Type != GroupUpdateType.MessageNew)
-            continue;
-
-        var msg = u.MessageNew.Message;
-
-        Console.WriteLine($"[{msg.PeerId}] {msg.Text}");
-
-        var text = (msg.Text ?? "").Trim().ToLower();
-
-        if (text == "привет")
-        {
-            try
-            {
-                api.Messages.Send(new MessagesSendParams
-                {
-                    PeerId = msg.PeerId,
-                    RandomId = DateTime.Now.Ticks,
-                    Message = "Запеленать ляльку!"
-                });
-
-                Console.WriteLine("Ответ отправлен");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Ошибка отправки: " + ex.Message);
-            }
-        }
-    }
-
-    System.Threading.Thread.Sleep(500);
-}
+botService.Run();
