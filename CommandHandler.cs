@@ -23,7 +23,7 @@ public class CommandHandler
             if (text.Length > 1000)
             {
                 Logger.Warning($"Сообщение слишком длинное от пользователя {userId}");
-                return "❌ Сообщение слишком длинное.";
+                return "Сообщение слишком длинное.";
             }
 
             var lower = text.ToLowerInvariant();
@@ -40,7 +40,7 @@ public class CommandHandler
             {
                 _pollManager.Cancel(peerId);
                 Logger.Info($"Пользователь {userId} отменил голосование в беседе {peerId}");
-                return "❌ Голосование отменено. Можно начать заново с /create";
+                return "Голосование отменено. Можно начать заново с /create";
             }
 
             if (lower == "/create")
@@ -48,18 +48,18 @@ public class CommandHandler
                 var currentState = _pollManager.GetState(peerId);
                 if (currentState == BotState.Voting || currentState == BotState.WaitingOptions)
                 {
-                    return "⚠️ Голосование уже идёт. Завершите его /end или отмените /cancel";
+                    return "Голосование уже идёт. Завершите его /end или отмените /cancel";
                 }
 
                 _pollManager.CreatePoll(peerId, userId);
                 Logger.Info($"Пользователь {userId} создал новое голосование в беседе {peerId}");
-                return "📝 Введите название голосования\n\nПример: Куда пойти в выходной?";
+                return "Введите название голосования\n\nПример: Куда пойти в выходной?";
             }
 
             if (lower == "/result")
             {
                 if (state == BotState.None)
-                    return "❌ Голосование ещё не создано.";
+                    return "Голосование ещё не создано.";
 
                 Logger.Info($"Пользователь {userId} запросил результаты в беседе {peerId}");
                 return _pollManager.GetResultsText(peerId);
@@ -68,7 +68,7 @@ public class CommandHandler
             if (lower == "/end")
             {
                 if (state == BotState.None)
-                    return "❌ Нет активного голосования.";
+                    return "Нет активного голосования.";
 
                 Logger.Info($"Пользователь {userId} завершил голосование в беседе {peerId}");
                 return _pollManager.FinishPoll(peerId);
@@ -77,7 +77,7 @@ public class CommandHandler
             if (lower == "/start")
             {
                 if (state != BotState.WaitingOptions)
-                    return "⚠️ Сначала создайте голосование (/create) и добавьте варианты.";
+                    return "Сначала создайте голосование (/create) и добавьте варианты.";
 
                 Logger.Info($"Пользователь {userId} запустил голосование в беседе {peerId}");
                 return _pollManager.StartVoting(peerId);
@@ -91,10 +91,10 @@ public class CommandHandler
                 ).Result;
 
                 if (cities.Count == 0)
-                    return "❌ Не удалось получить список городов";
+                    return "Не удалось получить список городов";
 
                 var sb = new System.Text.StringBuilder();
-                sb.AppendLine("🏙️ Доступные города:");
+                sb.AppendLine("Доступные города:");
                 sb.AppendLine();
                 for (int i = 0; i < Math.Min(cities.Count, 30); i++)
                 {
@@ -107,12 +107,12 @@ public class CommandHandler
             {
                 var parts = text.Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length < 2)
-                    return "⚠️ Укажите город.\nПример: /events Москва\n\n/cities — посмотреть доступные города";
+                    return "Укажите город.\nПример: /events Москва\n\n/cities — посмотреть доступные города";
 
                 var city = string.Join(" ", parts.Skip(1));
 
                 if (city.Length > MaxCityNameLength)
-                    return $"❌ Название города слишком длинное (максимум {MaxCityNameLength} символов).";
+                    return $"Название города слишком длинное (максимум {MaxCityNameLength} символов).";
 
                 Logger.Info($"Пользователь {userId} запросил события в городе '{city}' беседе {peerId}");
                 
@@ -128,13 +128,13 @@ public class CommandHandler
             if (state == BotState.WaitingTitle)
             {
                 if (lower.StartsWith("/"))
-                    return "⚠️ Введите название голосования обычным текстом.\n/cancel — отменить создание";
+                    return "Введите название голосования обычным текстом.\n/cancel — отменить создание";
 
                 if (text.Length > 100)
-                    return "❌ Название слишком длинное (макс 100 символов)";
+                    return "Название слишком длинное (макс 100 символов)";
 
                 if (text.Length < 3)
-                    return "❌ Название слишком короткое (минимум 3 символа)";
+                    return "Название слишком короткое (минимум 3 символа)";
 
                 Logger.Info($"Пользователь {userId} установил название: '{text}'");
                 return _pollManager.SetTitle(peerId, text);
@@ -152,17 +152,17 @@ public class CommandHandler
                 {
                     _pollManager.Cancel(peerId);
                     Logger.Info($"Пользователь {userId} отменил создание голосования");
-                    return "❌ Создание голосования отменено.";
+                    return "Создание голосования отменено.";
                 }
 
                 if (lower.StartsWith("/"))
-                    return "⚠️ Добавляйте варианты текстом или напишите /start";
+                    return "Добавляйте варианты текстом или напишите /start";
 
                 if (text.Length > 50)
-                    return "❌ Вариант слишком длинный (макс 50 символов)";
+                    return "Вариант слишком длинный (макс 50 символов)";
 
                 if (text.Length < 2)
-                    return "❌ Вариант слишком короткий (минимум 2 символа)";
+                    return "Вариант слишком короткий (минимум 2 символа)";
 
                 Logger.Info($"Пользователь {userId} добавил вариант: '{text}'");
                 return _pollManager.AddOption(peerId, text);
@@ -182,7 +182,7 @@ public class CommandHandler
                     return result;
                 }
 
-                return "⚠️ Отправьте номер категории.";
+                return "Отправьте номер категории.";
             }
 
             if (state == BotState.Voting)
@@ -200,7 +200,7 @@ public class CommandHandler
                 }
 
                 if (lower == "/cancel" || lower == "/start" || lower == "/create")
-                    return "⚠️ Голосование в процессе. Используйте /result или /end";
+                    return "Голосование в процессе. Используйте /result или /end";
 
                 if (int.TryParse(text, out int choice))
                 {
@@ -218,7 +218,7 @@ public class CommandHandler
                 {
                     _pollManager.CreatePoll(peerId, userId);
                     Logger.Info($"Пользователь {userId} создал новое голосование (после завершения)");
-                    return "📝 Введите название голосования";
+                    return "Введите название голосования";
                 }
 
                 return string.Empty;
@@ -231,35 +231,35 @@ public class CommandHandler
             }
 
             Logger.Warning($"Неизвестная команда от пользователя {userId}: '{text}'");
-            return "❓ Неизвестная команда.\n/help — список команд";
+            return "Неизвестная команда.\n/help — список команд";
         }
         catch (Exception ex)
         {
             Logger.Error($"Критическая ошибка в CommandHandler для пользователя {userId}: {ex.Message}");
-            return "❌ Произошла ошибка. Попробуйте позже.";
+            return "Произошла ошибка. Попробуйте позже.";
         }
     }
 
     private string GetHelpMessage()
     {
-        return @"📚 Доступные команды:
+        return @"Доступные команды:
 
-        🗳️ ОСНОВНЫЕ:
+        ОСНОВНЫЕ:
         /create — начать новое голосование
         /start — запустить голосование после добавления вариантов
         /result — показать текущие результаты
         /end — завершить голосование и показать итоги
 
-        ⚙️ ДРУГОЕ:
+        ДРУГОЕ:
         /cancel — отменить текущее голосование
         /help — эта справка
 
-        🎭 МЕРОПРИЯТИЯ:
+        МЕРОПРИЯТИЯ:
         /events [город] — создать голосование из мероприятий
         /cities — список доступных городов
 
         Примеры:
         /events Москва
-        /events Санкт-Петербург";
+        /events Воронеж";
     }
 }
