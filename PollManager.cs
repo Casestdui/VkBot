@@ -2,16 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 public class PollManager
 {
     private readonly Dictionary<long, PollSession> _pollSessions = new();
-    private readonly KudaGoService _kudaGoService;
+    private readonly TimepadService _timepadService;
     private readonly Random _random = new Random();
 
     public PollManager()
     {
-        _kudaGoService = new KudaGoService();
+        _timepadService = new TimepadService();
     }
 
     public PollSession GetOrCreateSession(long peerId)
@@ -119,10 +120,14 @@ public class PollManager
         if (string.IsNullOrWhiteSpace(session.CurrentPoll.Title))
             return "Голосование ещё не создано.";
 
+        if (session.CurrentPoll.Options.Count == 0)
+            return "Варианты голосования не заданы.";
+
         var counts = new int[session.CurrentPoll.Options.Count];
         foreach (var vote in session.Votes.Values)
         {
-            counts[vote]++;
+            if (vote >= 0 && vote < counts.Length)
+                counts[vote]++;
         }
 
         var sb = new StringBuilder();
@@ -131,10 +136,8 @@ public class PollManager
 
         if (session.Votes.Count > 0)
         {
-            // Находим максимальное количество голосов
             int maxVotes = counts.Max();
-            
-            // Находим ВСЕ варианты с максимальным количеством голосов
+
             var winners = new List<int>();
             for (int i = 0; i < counts.Length; i++)
             {
@@ -144,18 +147,16 @@ public class PollManager
                 }
             }
 
-            // Если только один победитель
             if (winners.Count == 1)
             {
                 sb.AppendLine($"Победитель: {session.CurrentPoll.Options[winners[0]]} ({maxVotes} голосов)");
                 Logger.Success($"Победитель: {session.CurrentPoll.Options[winners[0]]}");
             }
-            // Если ничья - выбираем СЛУЧАЙНОГО победителя
             else
             {
                 var randomWinnerIndex = winners[_random.Next(winners.Count)];
                 var winnerOption = session.CurrentPoll.Options[randomWinnerIndex];
-                
+
                 sb.AppendLine("Ребята у нас с вами одинаковые голоса, поэтому я выберу за вас!");
                 sb.AppendLine();
                 sb.AppendLine("Варианты-лидеры:");
@@ -165,7 +166,7 @@ public class PollManager
                 }
                 sb.AppendLine();
                 sb.AppendLine($"Я выбираю... {winnerOption}!");
-                
+
                 Logger.Warning($"Ничья между {winners.Count} вариантами! Случайно выбран: {winnerOption}");
             }
         }
@@ -200,17 +201,17 @@ public class PollManager
         }
     }
 
-    public async System.Threading.Tasks.Task<string> StartEventSelectionAsync(long peerId, string city)
+    public async Task<string> StartEventSelectionAsync(long peerId, string city)
     {
         var session = GetOrCreateSession(peerId);
-        
+
         if (string.IsNullOrWhiteSpace(city))
             return "Укажите город. Пример: /events Воронеж";
 
         session.SelectedCity = city.Trim();
         session.State = BotState.WaitingEventCategory;
 
-        var categories = await _kudaGoService.GetCategoriesAsync();
+        var categories = await _timepadService.GetCategoriesAsync();
         session.AvailableCategories = categories;
 
         var sb = new StringBuilder();
@@ -225,7 +226,7 @@ public class PollManager
         return sb.ToString();
     }
 
-    public async System.Threading.Tasks.Task<string> CreateEventPollAsync(long peerId, int categoryIndex)
+    public async Task<string> CreateEventPollAsync(long peerId, int categoryIndex)
     {
         var session = GetOrCreateSession(peerId);
 
@@ -233,7 +234,7 @@ public class PollManager
             return "Неверный номер категории.";
 
         var category = session.AvailableCategories[categoryIndex];
-        var events = await _kudaGoService.GetEventsAsync(session.SelectedCity, category);
+        var events = await _timepadService.GetEventsAsync(session.SelectedCity, category);
 
         if (events.Count < 2)
             return $"Не удалось получить мероприятия для категории '{category}' в городе '{session.SelectedCity}'";
@@ -262,9 +263,9 @@ public class PollManager
         return sb.ToString();
     }
 
-    public async System.Threading.Tasks.Task<List<string>> GetAvailableCitiesAsync()
+    public async Task<List<string>> GetAvailableCitiesAsync()
     {
-        return await _kudaGoService.GetAvailableCitiesAsync();
+        return await _timepadService.GetAvailableCitiesAsync();
     }
 
     public List<string> GetCurrentOptions(long peerId)
