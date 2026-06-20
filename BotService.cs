@@ -2,6 +2,9 @@ using System;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.IO;
+using System.Net;
+using System.Text;
 using VkNet;
 using VkNet.Enums.SafetyEnums;
 using VkNet.Model.RequestParams;
@@ -210,13 +213,77 @@ public class BotService
         {
             var keyboard = BuildKeyboardForPeer(peerId);
 
-            _api.Messages.Send(new MessagesSendParams
+            // Попробуем подобрать баннер для текущей сессии/состояния
+            string? bannerPath = SelectBannerForPeer(peerId);
+            string[]? attachments = null;
+
+            if (!string.IsNullOrWhiteSpace(bannerPath))
+            {
+                try
+                {
+                    string path = bannerPath!;
+
+                    // Если bannerPath — внешний URL, скачиваем во временный файл
+                    if (Uri.IsWellFormedUriString(path, UriKind.Absolute) && (path.StartsWith("http://") || path.StartsWith("https://")))
+                    {
+                        var tmp = Path.GetTempFileName();
+                        using (var wc = new WebClient())
+                            wc.DownloadFile(path, tmp);
+                        path = tmp;
+                    }
+
+                    // Проверяем, что файл существует
+                    if (File.Exists(path))
+                    {
+                        var uploadServer = _api.Photo.GetMessagesUploadServer(peerId);
+
+                        // Загрузка файла на upload URL
+                        var webClient = new WebClient();
+                        var responseBytes = webClient.UploadFile(uploadServer.UploadUrl, path);
+                        var responseJson = Encoding.UTF8.GetString(responseBytes);
+
+                        using var doc = JsonDocument.Parse(responseJson);
+                        var root = doc.RootElement;
+
+                        if (root.TryGetProperty("photo", out var photoEl) && root.TryGetProperty("server", out var serverEl) && root.TryGetProperty("hash", out var hashEl))
+                        {
+                            var photo = photoEl.GetString() ?? string.Empty;
+                            var server = serverEl.GetInt32();
+                            var hash = hashEl.GetString() ?? string.Empty;
+
+                            var saved = _api.Photo.SaveMessagesPhoto(photo, server, hash);
+                            var p = saved?.FirstOrDefault();
+                            if (p != null)
+                            {
+                                attachments = new[] { $"photo{p.OwnerId}_{p.Id}" };
+                            }
+                        }
+
+                        // Если мы скачали во временный файл — попытка удалить
+                        if (Path.GetTempPath() != null && path.StartsWith(Path.GetTempPath()))
+                        {
+                            try { File.Delete(path); } catch { }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Не удалось прикрепить баннер: {ex}");
+                }
+            }
+
+            var sendParams = new MessagesSendParams
             {
                 PeerId = peerId,
                 RandomId = Random.Shared.NextInt64(),
                 Message = message,
                 Keyboard = keyboard
-            });
+            };
+
+            if (attachments != null && attachments.Length > 0)
+                sendParams.Attachments = attachments;
+
+            _api.Messages.Send(sendParams);
 
             Logger.Success("Ответ отправлен");
         }
@@ -246,7 +313,7 @@ public class BotService
                         {
                             Type = KeyboardButtonActionType.Text,
                             Label = label,
-                            Payload = $"{{\"vote\":{i}}}"
+                            Payload = $"{\"vote\":{i}}"
                         };
                         kb.AddButton(action, KeyboardButtonColor.Primary);
 
@@ -330,9 +397,107 @@ public class BotService
                 return kb.Build();
             }
 
-            // WaitingEventCategory — минимальные кнопки (Отмена/Помощь)
+            // WaitingEventCategory — если есть категории, показываем кнопки с номерами
             if (state == BotState.WaitingEventCategory)
             {
+                var session = _pollManager.GetOrCreateSession(peerId);
+                var cats = session.AvailableCategories;
+                if (cats != null && cats.Count > 0)
+                {
+                    for (int i = 0; i < cats.Count; i++)
+                    {
+                        var label = (i + 1).ToString();
+                        var action = new MessageKeyboardButtonAction
+                        {
+                            Type = KeyboardButtonActionType.Text,
+                            Label = label,
+                            Payload = $"{\"vote\":{i}}"
+                        };
+                        kb.AddButton(action, KeyboardButtonColor.Primary);
+
+                        if ((i + 1) % 3 == 0 && i + 1 < cats.Count)
+                            kb.AddLine();
+                    }
+
+                    kb.AddLine();
+
+                    kb.AddButton(new MessageKeyboardButtonAction
+                    {
+                        Type = KeyboardButtonActionType.Text,
+                        Label = "Отмена",
+                        Payload = "{\"cmd\":\"/cancel\"}"
+                    }, KeyboardButtonColor.Negative);
+
+                    kb.AddButton(new MessageKeyboardButtonAction
+                    {
+                        Type = KeyboardButtonActionType.Text,
+                        Label = "Помощь",
+                        Payload = "{\"cmd\":\"/help\"}"
+                    }, KeyboardButtonColor.Positive);
+
+                    return kb.Build();
+                }
+
+                // fallback — минимальные кнопки
+                kb.AddButton(new MessageKeyboardButtonAction
+                {
+                    Type = KeyboardButtonActionType.Text,
+                    Label = "Отмена",
+                    Payload = "{\"cmd\":\"/cancel\"}"
+                }, KeyboardButtonColor.Negative);
+
+                kb.AddButton(new MessageKeyboardButtonAction
+                {
+                    Type = KeyboardButtonActionType.Text,
+                    Label = "Помощь",
+                    Payload = "{\"cmd\":\"/help\"}"
+                }, KeyboardButtonColor.Positive);
+
+                return kb.Build();
+            }
+
+            // WaitingCity — после /cities отображаем кнопки с номерами городов
+            if (state == BotState.WaitingCity)
+            {
+                var session = _pollManager.GetOrCreateSession(peerId);
+                var cities = session.AvailableCategories; // reused field for cities
+                if (cities != null && cities.Count > 0)
+                {
+                    for (int i = 0; i < cities.Count; i++)
+                    {
+                        var label = (i + 1).ToString();
+                        var action = new MessageKeyboardButtonAction
+                        {
+                            Type = KeyboardButtonActionType.Text,
+                            Label = label,
+                            Payload = $"{\"vote\":{i}}"
+                        };
+                        kb.AddButton(action, KeyboardButtonColor.Primary);
+
+                        if ((i + 1) % 3 == 0 && i + 1 < cities.Count)
+                            kb.AddLine();
+                    }
+
+                    kb.AddLine();
+
+                    kb.AddButton(new MessageKeyboardButtonAction
+                    {
+                        Type = KeyboardButtonActionType.Text,
+                        Label = "Отмена",
+                        Payload = "{\"cmd\":\"/cancel\"}"
+                    }, KeyboardButtonColor.Negative);
+
+                    kb.AddButton(new MessageKeyboardButtonAction
+                    {
+                        Type = KeyboardButtonActionType.Text,
+                        Label = "Помощь",
+                        Payload = "{\"cmd\":\"/help\"}"
+                    }, KeyboardButtonColor.Positive);
+
+                    return kb.Build();
+                }
+
+                // fallback
                 kb.AddButton(new MessageKeyboardButtonAction
                 {
                     Type = KeyboardButtonActionType.Text,
@@ -424,6 +589,39 @@ public class BotService
         catch
         {
             return 0;
+        }
+    }
+
+    // -------------------- Баннеры --------------------
+    private string? SelectBannerForPeer(long peerId)
+    {
+        try
+        {
+            var session = _pollManager.GetOrCreateSession(peerId);
+            var state = session.State;
+
+            // Локальная папка с баннерами (положите сюда ваши файлы)
+            var baseDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory ?? ".", "Assets", "banners");
+
+            switch (state)
+            {
+                case BotState.Voting:
+                    return Path.Combine(baseDir, "voting.jpg");
+                case BotState.WaitingEventCategory:
+                    return Path.Combine(baseDir, "events_choose_category.jpg");
+                case BotState.WaitingOptions:
+                case BotState.WaitingTitle:
+                    return Path.Combine(baseDir, "create_poll.jpg");
+                case BotState.WaitingCity:
+                    return Path.Combine(baseDir, "cities.jpg");
+                case BotState.None:
+                default:
+                    return Path.Combine(baseDir, "default.jpg");
+            }
+        }
+        catch
+        {
+            return null;
         }
     }
 }
