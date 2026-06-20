@@ -3,7 +3,7 @@ using VkNet.Model;
 
 const long GroupId = 239555205;
 
-const string Token = "Токен";
+const string Token = "токен";
 
 var api = new VkApi();
 

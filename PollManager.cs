@@ -7,12 +7,12 @@ using System.Threading.Tasks;
 public class PollManager
 {
     private readonly Dictionary<long, PollSession> _pollSessions = new();
-    private readonly TimepadService _timepadService;
+    private readonly KudaGoService _kudaGoService;  // ← Изменено с TimepadService
     private readonly Random _random = new Random();
 
     public PollManager()
     {
-        _timepadService = new TimepadService();
+        _kudaGoService = new KudaGoService();  // ← Изменено с TimepadService
     }
 
     public PollSession GetOrCreateSession(long peerId)
@@ -43,10 +43,10 @@ public class PollManager
         session.CurrentPoll.Title = title.Trim();
         session.State = BotState.WaitingOptions;
 
-        return @"Название сохранено.
+        return @"✅ Название сохранено.
 
-        Теперь отправляйте варианты по одному.
-        Когда закончите, напишите /start";
+Теперь отправляйте варианты по одному.
+Когда закончите, напишите /start";
     }
 
     public string AddOption(long peerId, string option)
@@ -61,10 +61,10 @@ public class PollManager
             .Any(x => x.Trim().Equals(option, StringComparison.OrdinalIgnoreCase));
 
         if (exists)
-            return $"Вариант «{option}» уже в списке.";
+            return $"❌ Вариант «{option}» уже в списке.";
 
         session.CurrentPoll.Options.Add(option);
-        return $"Добавлено: {option}";
+        return $"✅ Добавлено: {option}";
     }
 
     public string StartVoting(long peerId)
@@ -72,7 +72,7 @@ public class PollManager
         var session = GetOrCreateSession(peerId);
 
         if (session.CurrentPoll.Options.Count < 2)
-            return "Минимум 2 варианта для голосования.";
+            return "❌ Минимум 2 варианта для голосования.";
 
         session.CurrentPoll.IsActive = true;
         session.State = BotState.Voting;
@@ -98,19 +98,19 @@ public class PollManager
         var session = GetOrCreateSession(peerId);
 
         if (!session.CurrentPoll.IsActive)
-            return "Голосование не активно.";
+            return "❌ Голосование не активно.";
 
         if (optionIndex < 0 || optionIndex >= session.CurrentPoll.Options.Count)
-            return "Неверный номер.";
+            return "❌ Неверный номер.";
 
         if (session.Votes.ContainsKey(userId))
         {
             var previousChoice = session.CurrentPoll.Options[session.Votes[userId]];
-            return $"Вы уже голосовали за «{previousChoice}».\nОдин голос на одного участника!";
+            return $"⚠️ Вы уже голосовали за «{previousChoice}».\nОдин голос на одного участника!";
         }
 
         session.Votes[userId] = optionIndex;
-        return $"Голос принят за: {session.CurrentPoll.Options[optionIndex]}";
+        return $"✅ Голос принят за: {session.CurrentPoll.Options[optionIndex]}";
     }
 
     public string GetResultsText(long peerId)
@@ -149,7 +149,7 @@ public class PollManager
 
             if (winners.Count == 1)
             {
-                sb.AppendLine($"Победитель: {session.CurrentPoll.Options[winners[0]]} ({maxVotes} голосов)");
+                sb.AppendLine($"🏆 Победитель: {session.CurrentPoll.Options[winners[0]]} ({maxVotes} голосов)");
                 Logger.Success($"Победитель: {session.CurrentPoll.Options[winners[0]]}");
             }
             else
@@ -157,7 +157,7 @@ public class PollManager
                 var randomWinnerIndex = winners[_random.Next(winners.Count)];
                 var winnerOption = session.CurrentPoll.Options[randomWinnerIndex];
 
-                sb.AppendLine("Ребята у нас с вами одинаковые голоса, поэтому я выберу за вас!");
+                sb.AppendLine("😅 Ребята у нас с вами одинаковые голоса, поэтому я выберу за вас!");
                 sb.AppendLine();
                 sb.AppendLine("Варианты-лидеры:");
                 foreach (var winnerIdx in winners)
@@ -165,7 +165,7 @@ public class PollManager
                     sb.AppendLine($"  • {session.CurrentPoll.Options[winnerIdx]} ({maxVotes} голосов)");
                 }
                 sb.AppendLine();
-                sb.AppendLine($"Я выбираю... {winnerOption}!");
+                sb.AppendLine($"🎲 Я выбираю... {winnerOption}!");
 
                 Logger.Warning($"Ничья между {winners.Count} вариантами! Случайно выбран: {winnerOption}");
             }
@@ -190,7 +190,7 @@ public class PollManager
         session.CurrentPoll = new Poll();
         session.Votes.Clear();
 
-        return result + "\n\nГолосование завершено!";
+        return result + "\n\n✅ Голосование завершено!";
     }
 
     public void Cancel(long peerId)
@@ -206,16 +206,16 @@ public class PollManager
         var session = GetOrCreateSession(peerId);
 
         if (string.IsNullOrWhiteSpace(city))
-            return "Укажите город. Пример: /events Воронеж";
+            return "⚠️ Укажите город. Пример: /events Воронеж";
 
         session.SelectedCity = city.Trim();
         session.State = BotState.WaitingEventCategory;
 
-        var categories = await _timepadService.GetCategoriesAsync();
+        var categories = await _kudaGoService.GetCategoriesAsync();  // ← Изменено
         session.AvailableCategories = categories;
 
         var sb = new StringBuilder();
-        sb.AppendLine("Выбери категорию мероприятий:");
+        sb.AppendLine("🎭 Выбери категорию мероприятий:");
         sb.AppendLine();
 
         for (int i = 0; i < categories.Count; i++)
@@ -231,13 +231,13 @@ public class PollManager
         var session = GetOrCreateSession(peerId);
 
         if (categoryIndex < 0 || categoryIndex >= session.AvailableCategories.Count)
-            return "Неверный номер категории.";
+            return "❌ Неверный номер категории.";
 
         var category = session.AvailableCategories[categoryIndex];
-        var events = await _timepadService.GetEventsAsync(session.SelectedCity, category);
+        var events = await _kudaGoService.GetEventsAsync(session.SelectedCity, category);  // ← Изменено
 
         if (events.Count < 2)
-            return $"Не удалось получить мероприятия для категории '{category}' в городе '{session.SelectedCity}'";
+            return $"❌ Не удалось получить мероприятия для категории '{category}' в городе '{session.SelectedCity}'";
 
         session.ResetForNewPoll();
         session.CurrentPoll = new Poll
@@ -265,7 +265,7 @@ public class PollManager
 
     public async Task<List<string>> GetAvailableCitiesAsync()
     {
-        return await _timepadService.GetAvailableCitiesAsync();
+        return await _kudaGoService.GetAvailableCitiesAsync();  // ← Изменено
     }
 
     public List<string> GetCurrentOptions(long peerId)
