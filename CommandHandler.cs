@@ -40,7 +40,7 @@ public class CommandHandler
             var lower = text.ToLowerInvariant();
 
             // === ОСНОВНЫЕ КОМАНДЫ ===
-            
+
             if (lower == "/help" || lower == "помощь")
             {
                 return GetHelpMessage();
@@ -96,12 +96,18 @@ public class CommandHandler
             if (lower == "/cities" || lower == "города")
             {
                 Logger.Info($"Пользователь {userId} запросил список городов");
-                var cities = System.Threading.Tasks.Task.Run(async () => 
+
+                var cities = System.Threading.Tasks.Task.Run(async () =>
                     await _pollManager.GetAvailableCitiesAsync()
                 ).Result;
 
                 if (cities.Count == 0)
                     return "Не удалось получить список городов";
+
+                // Сохраняем города в сессии и переводим состояние в WaitingCity
+                var session = _pollManager.GetOrCreateSession(peerId);
+                session.AvailableCategories = cities; // используем AvailableCategories поле для списка городов
+                session.State = BotState.WaitingCity;
 
                 var sb = new System.Text.StringBuilder();
                 sb.AppendLine("Доступные города:");
@@ -110,6 +116,8 @@ public class CommandHandler
                 {
                     sb.AppendLine($"{i + 1}. {cities[i]}");
                 }
+                sb.AppendLine();
+                sb.AppendLine("Отправьте номер города, чтобы выбрать (кнопки также доступны).");
                 return sb.ToString();
             }
 
@@ -125,8 +133,8 @@ public class CommandHandler
                     return $"Название города слишком длинное (максимум {MaxCityNameLength} символов).";
 
                 Logger.Info($"Пользователь {userId} запросил события в городе '{city}' беседе {peerId}");
-                
-                var result = System.Threading.Tasks.Task.Run(async () => 
+
+                var result = System.Threading.Tasks.Task.Run(async () =>
                     await _pollManager.StartEventSelectionAsync(peerId, city)
                 ).Result;
 
@@ -195,14 +203,39 @@ public class CommandHandler
                 return _pollManager.AddOption(peerId, text);
             }
 
+            // Новый: обработка выбора города при /cities
+            if (state == BotState.WaitingCity)
+            {
+                if (int.TryParse(text, out int cityChoice))
+                {
+                    cityChoice--;
+                    var session = _pollManager.GetOrCreateSession(peerId);
+                    var cities = session.AvailableCategories;
+                    if (cities == null || cityChoice < 0 || cityChoice >= cities.Count)
+                        return "Неверный номер города. Отправьте правильный номер.";
+
+                    var city = cities[cityChoice];
+                    Logger.Info($"Пользователь {userId} выбрал город #{cityChoice + 1}: {city}");
+
+                    // Запускаем выбор категории мероприятий для выбранного города
+                    var result = System.Threading.Tasks.Task.Run(async () =>
+                        await _pollManager.StartEventSelectionAsync(peerId, city)
+                    ).Result;
+
+                    return result;
+                }
+
+                return "Отправьте номер города.";
+            }
+
             if (state == BotState.WaitingEventCategory)
             {
                 if (int.TryParse(text, out int choice))
                 {
                     choice--;
                     Logger.Info($"Пользователь {userId} выбрал категорию #{choice + 1}");
-                    
-                    var result = System.Threading.Tasks.Task.Run(async () => 
+
+                    var result = System.Threading.Tasks.Task.Run(async () =>
                         await _pollManager.CreateEventPollAsync(peerId, choice)
                     ).Result;
 
